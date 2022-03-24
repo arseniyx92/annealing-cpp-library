@@ -1,4 +1,4 @@
-.idea
+.idea/
 .gitignore
 CMakeLists.txt
-cmake-build-debug
+cmake-build-debug/
