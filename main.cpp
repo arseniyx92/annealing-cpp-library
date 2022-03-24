@@ -23,15 +23,15 @@ struct random_generator {
         probability_distribution = uniform_real_distribution<double>(0., 1.);
         rnd.seed(chrono::steady_clock::now().time_since_epoch().count());
     }
-    T gen(T x, T t, T l, T r) {
+    T gen(T x, double t, T l, T r) {
         T val;
         if (type == 0) {
             val = rnd();
         } else if (type == 1) {
-            normal_distribution<T> boltzmann(x, t);
+            normal_distribution<> boltzmann(x, t);
             val = boltzmann(rnd);
         } else if (type == 2) {
-            cauchy_distribution<T> cauchy(x, t);
+            cauchy_distribution<> cauchy(x, t);
             val = cauchy(rnd);
         }
         if (l > val) val = l;
@@ -93,7 +93,6 @@ struct acceptance_func {
 template <typename T, typename G>
 struct State {
     G f;
-    random_generator<T> gen;
     // TODO data maintainer
     //..
     //
@@ -102,7 +101,7 @@ struct State {
         //..
         //
     };
-    State<T, G> generate_new_state() {
+    State<T, G> generate_new_state(random_generator<T>& gen) {
         // TODO new state generation
         //..
         //
@@ -127,13 +126,12 @@ struct annealizer { // only for minimization (if you need to maximize change all
         gen = random_generator<T>(generator_type);
         descent = decrease_func(descent_type, descent_arg, t);
         acceptance = acceptance_func(AC_type, AC_arg);
-        G init = F(initial_state);
-        best_state = current_state = {init, initial_state};
+        best_state = current_state = initial_state;
     }
     State<T, G> anneal() {
         for (int iter = 0; iter < N; ++iter) {
             t = descent.decrease(t);
-            State<T, G> new_state = current_state.generate_new_state(gen);
+            State<T, G> new_state = current_state.generate_new_state(gen, t);
             if ((new_state.f < current_state.f) || (acceptance.decide(new_state.f-current_state.f, t, gen.generate_probability()))) {
                 current_state = new_state;
                 if (new_state.f < best_state.f) best_state = new_state;
@@ -149,17 +147,17 @@ struct annealizer { // only for minimization (if you need to maximize change all
     //1 number of iterations
     //1 initial temperature
     //1 generator type
+    //      0) pure mt19937
     //      1) BOLTZMANN ANNEALING
     //      2) FAST ANNEALING (Cauchy)
-    //      3) pure randomness
     //1 descent type
-    //      1) BOLTZMANN DESCENT T[k] = T[0]/ln(k+1)
-    //      2) CAUCHY DESCENT T[k] = T[0]/k
-    //      3) EXPONENTIAL DESCENT T[k] = T[k-1]*d; where d [0;1] is a parameter
+    //      0) BOLTZMANN DESCENT T[k] = T[0]/ln(k+1)
+    //      1) CAUCHY DESCENT T[k] = T[0]/k
+    //      2) EXPONENTIAL DESCENT T[k] = T[k-1]*d; where d [0;1] is a parameter
     //1 d parameter (optional if EXPONENTIAL DESCENT chosen)
     //1 acceptance type (h)
-    //      1) h = exp(-eps*(E[t]-E[t-1])/T) where eps is a parameter
-    //      2) h = distrib(rnd(), 0., 1.)
+    //      0) h = exp(-eps*(E[t]-E[t-1])/T) where eps is a parameter
+    //      1) h = T
     //1 eps parameter (optional if h = exp(-e*(E[t]-E[t-1])/T) chosen)
     //0 savings file path
 };
