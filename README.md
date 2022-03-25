@@ -1,5 +1,5 @@
 # Annealing Library
-![annealing logo](media/logo.jpeg)
+![annealing logo](media/logo_annealing.png)
 
 
 ### Resources
