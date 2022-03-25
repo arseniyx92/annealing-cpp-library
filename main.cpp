@@ -8,18 +8,26 @@ using namespace std;
 
 template <typename T>
 struct random_generator {
-    int type = 0;
+    int type = 0; double arg;
     mt19937 rnd;
     uniform_real_distribution<double> probability_distribution;
+    uniform_real_distribution<double> double_distribution;
+    uniform_int_distribution<int> integer_distribution;
     // TYPES:
     //      0) usual mt19937 (normal distribution)
     //      1) BOLTZMANN ANNEALING (normal distribution)
     //      2) FAST ANNEALING (Cauchy distribution)
-    random_generator() {
+    //      3) uniform_real_distribution
+    //      3) uniform_int_distribution
+    random_generator(): type(0), arg(1) {
         probability_distribution = uniform_real_distribution<double>(0., 1.);
         rnd.seed(chrono::steady_clock::now().time_since_epoch().count());
     }
-    random_generator(int type): type(type) {
+    random_generator(int type): type(type), arg(1) {
+        probability_distribution = uniform_real_distribution<double>(0., 1.);
+        rnd.seed(chrono::steady_clock::now().time_since_epoch().count());
+    }
+    random_generator(int type, double arg): type(type), arg(arg) {
         probability_distribution = uniform_real_distribution<double>(0., 1.);
         rnd.seed(chrono::steady_clock::now().time_since_epoch().count());
     }
@@ -28,14 +36,23 @@ struct random_generator {
         if (type == 0) {
             val = rnd();
         } else if (type == 1) {
-            normal_distribution<> boltzmann(x, t);
+            normal_distribution<> boltzmann(x, t*arg);
             val = boltzmann(rnd);
         } else if (type == 2) {
-            cauchy_distribution<> cauchy(x, t);
+            cauchy_distribution<> cauchy(x, t*arg);
             val = cauchy(rnd);
+        } else if (type == 3) {
+            double_distribution = uniform_real_distribution<double>(l, r);
+            val = double_distribution(rnd);
+        } else {
+            integer_distribution = uniform_int_distribution<int>(l, r);
+            val = integer_distribution(rnd);
         }
-        if (l > val) val = l;
-        if (r < val) val = r;
+        if (l > val || r < val) {
+            if (l >= 0 && val < 0) val *= -1.;
+            val = val - (val / (r - l + 1)) * (r - l + 1);
+            val += l;
+        }
         return val;
     }
     double generate_probability() {
@@ -120,10 +137,10 @@ struct annealizer { // only for minimization (if you need to maximize change all
     random_generator<T> gen;
     decrease_func descent;
     acceptance_func acceptance;
-    annealizer(State<T, G> initial_state, int iterations, double temperature, int generator_type, int descent_type, double descent_arg, int AC_type, double AC_arg) {
+    annealizer(State<T, G> initial_state, int iterations, double temperature, int generator_type, double generator_arg, int descent_type, double descent_arg, int AC_type, double AC_arg) {
         N = iterations;
         t = temperature;
-        gen = random_generator<T>(generator_type);
+        gen = random_generator<T>(generator_type, generator_arg);
         descent = decrease_func(descent_type, descent_arg, t);
         acceptance = acceptance_func(AC_type, AC_arg);
         best_state = current_state = initial_state;
@@ -147,7 +164,7 @@ struct annealizer { // only for minimization (if you need to maximize change all
     //1 number of iterations
     //1 initial temperature
     //1 generator type
-    //      0) pure mt19937
+    //      0) pure randomness
     //      1) BOLTZMANN ANNEALING
     //      2) FAST ANNEALING (Cauchy)
     //1 descent type
