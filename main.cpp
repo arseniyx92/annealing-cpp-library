@@ -18,7 +18,7 @@ struct random_generator {
     //      1) BOLTZMANN ANNEALING (normal distribution)
     //      2) FAST ANNEALING (Cauchy distribution)
     //      3) uniform_real_distribution
-    //      3) uniform_int_distribution
+    //      4) uniform_int_distribution
     random_generator(): type(0), arg(1) {
         probability_distribution = uniform_real_distribution<double>(0., 1.);
         rnd.seed(chrono::steady_clock::now().time_since_epoch().count());
@@ -44,7 +44,7 @@ struct random_generator {
         } else if (type == 3) {
             double_distribution = uniform_real_distribution<double>(l, r);
             val = double_distribution(rnd);
-        } else {
+        } else if (type == 4) {
             integer_distribution = uniform_int_distribution<int>(l, r);
             val = integer_distribution(rnd);
         }
