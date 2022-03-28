@@ -1,4 +1,4 @@
-#define ASYNC 0
+#define ASYNC 1
 #if ASYNC
     #include <future>
     #include <mutex>
