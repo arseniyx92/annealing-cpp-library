@@ -1,8 +1,8 @@
-#define ASYNC 0
+#define ASYNC 1
 #if ASYNC
-    #include <future>
-    #include <mutex>
-    static std::mutex Tmutex;
+#include <future>
+#include <mutex>
+static std::mutex Tmutex;
 #else
 #endif
 
@@ -12,6 +12,7 @@
 #include <random>
 #include <chrono>
 #include <cmath>
+#include <thread>
 using namespace std;
 
 template <typename T>
@@ -29,15 +30,18 @@ struct random_generator {
     //      4) uniform_int_distribution
     random_generator(): type(0), arg(1) {
         probability_distribution = uniform_real_distribution<double>(0., 1.);
-        rnd.seed(chrono::steady_clock::now().time_since_epoch().count());
+        //rnd.seed(chrono::steady_clock::now().time_since_epoch().count());
+        rnd.seed(55);
     }
     random_generator(int type): type(type), arg(1) {
         probability_distribution = uniform_real_distribution<double>(0., 1.);
-        rnd.seed(chrono::steady_clock::now().time_since_epoch().count());
+        //rnd.seed(chrono::steady_clock::now().time_since_epoch().count());
+        rnd.seed(55);
     }
     random_generator(int type, double arg): type(type), arg(arg) {
         probability_distribution = uniform_real_distribution<double>(0., 1.);
-        rnd.seed(chrono::steady_clock::now().time_since_epoch().count());
+        //rnd.seed(chrono::steady_clock::now().time_since_epoch().count());
+        rnd.seed(55);
     }
     T gen(T x, double t, T l, T r) {
         T val;
@@ -120,23 +124,36 @@ struct acceptance_func {
 template <typename T, typename G>
 struct State {
     G f;
-    // TODO data maintainer
-    //..
-    //
-    State() {
-        // TODO State constructor
-        //..
-        //
+    int n;
+    vector<int> perm;
+    State() = default;
+    State(int n): n(n) {
+        mt19937 rnd(55);
+        perm.resize(n); iota(perm.begin(), perm.end(), 0); shuffle(perm.begin(), perm.end(), rnd);
+        f = F();
     };
-    State<T, G> generate_new_state(random_generator<T>& gen) {
-        // TODO new state generation
-        //..
-        //
+    State(int n, vector<int> perm): n(n), perm(move(perm)) {
+        f = F();
+    }
+    ~State() {
+        perm.clear();
+        perm.shrink_to_fit();
+    }
+    State<T, G> generate_new_state(random_generator<T>& gen, double t) {
+        vector<int> nperm = perm;
+        int i = gen.gen(n/2, t, 0, n-1);
+        int j = gen.gen(n/2, t, 0, n-1);
+        swap(nperm[i], nperm[j]);
+        return State<T, G>(n, nperm);
     }
     T F() {
-        // TODO new estimation function
-        //..
-        //
+        f = 0;
+        for (int i = 0; i < n; ++i) {
+            for (int j = i+1; j < n; ++j) {
+                if ((j-i)+perm[i] == perm[j] || (i-j)+perm[i] == perm[j]) f++;
+            }
+        }
+        return f;
     }
 }; // TODO this structure needs user's alterations
 
@@ -192,21 +209,27 @@ struct annealizer { // only for minimization (if you need to maximize change all
 template <typename T, typename G>
 static void fixedTemperatureForSearch(State<T, G> initial_state, int iterations, double temperature, double accept_arg, vector<pair<double, double> >* TemperatureResults) {
     annealizer instance(initial_state, iterations, temperature, 4, 1., 2, 0.9, 0, accept_arg);
-    #if ASYNC
-        lock_guard<mutex> lock(Tmutex);
-    #else
-    #endif
+#if ASYNC
+    lock_guard<mutex> lock(Tmutex);
+#else
+#endif
     TemperatureResults->emplace_back(instance.anneal().f, temperature);
+    //cerr << this_thread::get_id() << endl;
 }
 
 template <typename T, typename G>
 static void fixedDescentForSearch(State<T, G> initial_state, int iterations, double temperature, double accept_arg, double descent, vector<pair<double, double> >* DescentResults) {
     annealizer instance(initial_state, iterations, temperature, 4, 1., 2, descent, 0, accept_arg);
-    #if ASYNC
-        lock_guard<mutex> lock(Tmutex);
-    #else
-    #endif
+#if ASYNC
+    lock_guard<mutex> lock(Tmutex);
+#else
+#endif
     DescentResults->emplace_back(instance.anneal().f, descent);
+}
+
+static void keks() {
+    int x = 0;
+    x++;
 }
 
 template <typename T, typename G>
@@ -233,47 +256,51 @@ State<T, G> autoSearch(State<T, G> initial_state, double SecondsToWait = 30.) {
     // achieving appropriate temperature
     random_generator<double> TemperatureGenerator(3);
     const int K = 50;
-    #if ASYNC
-        vector<future<void> > TemperatureFutures;
-    #else
-    #endif
+#if ASYNC
+    vector<future<void> > TemperatureFutures;
+#else
+#endif
     vector<pair<double, double> > TemperatureResults;
     for (int i = 0; i < K; ++i) {
         double t = TemperatureGenerator.gen(0., 1., 0.65, 0.95);
-        #if ASYNC
-            TemperatureFutures.push_back(async(launch::async, fixedTemperatureForSearch<T, G>, initial_state, APPROBATION_ITERATIONS, t, ACCEPT_ARG, &TemperatureResults));
-        #else
-            fixedTemperatureForSearch(initial_state, APPROBATION_ITERATIONS, t, ACCEPT_ARG, &TemperatureResults);
-        #endif
+#if ASYNC
+        TemperatureFutures.push_back(async(launch::async, fixedTemperatureForSearch<T, G>, initial_state, APPROBATION_ITERATIONS, t, ACCEPT_ARG, &TemperatureResults));
+#else
+        fixedTemperatureForSearch(initial_state, APPROBATION_ITERATIONS, t, ACCEPT_ARG, &TemperatureResults);
+#endif
     }
-    #if ASYNC
-        for (int i = 0; i < K; ++i) TemperatureFutures[i].wait();
-    #else
-    #endif
-    sort(TemperatureResults.begin(), TemperatureResults.end()); // NOT AS GOOD AS POSSIBLE
+#if ASYNC
+//    std::this_thread::sleep_for(std::chrono::seconds(1000));
+//    cout << "KEK" << endl;
+    for (int i = 0; i < K; ++i) {
+        TemperatureFutures[i].wait();
+    }
+#else
+#endif
+    sort(TemperatureResults.begin(), TemperatureResults.end());
     double TEMPERATURE = TemperatureResults[0].second;
     cerr << "FOUND BEST TEMPERATURE: " << TEMPERATURE << endl;
 
     // achieving appropriate descent function
     random_generator<double> DescentGenerator(3);
     const int H = 50;
-    #if ASYNC
-        vector<future<void> > DescentFutures;
-    #else
-    #endif
+#if ASYNC
+    vector<future<void> > DescentFutures;
+#else
+#endif
     vector<pair<double, double> > DescentResults;
     for (int i = 0; i < H; ++i) {
         double descent = DescentGenerator.gen(0., 1., 0.8, 0.999);
-        #if ASYNC
-            DescentFutures.push_back(async(launch::async, fixedDescentForSearch<T, G>, initial_state, APPROBATION_ITERATIONS, TEMPERATURE, ACCEPT_ARG, descent, &DescentResults));
-        #else
-            fixedDescentForSearch(initial_state, APPROBATION_ITERATIONS, TEMPERATURE, ACCEPT_ARG, descent, &DescentResults);
-        #endif
+#if ASYNC
+        DescentFutures.push_back(async(launch::async, fixedDescentForSearch<T, G>, initial_state, APPROBATION_ITERATIONS, TEMPERATURE, ACCEPT_ARG, descent, &DescentResults));
+#else
+        fixedDescentForSearch(initial_state, APPROBATION_ITERATIONS, TEMPERATURE, ACCEPT_ARG, descent, &DescentResults);
+#endif
     }
-    #if ASYNC
-        for (int i = 0; i < H; ++i) DescentFutures[i].wait();
-    #else
-    #endif
+#if ASYNC
+    for (int i = 0; i < H; ++i) DescentFutures[i].wait();
+#else
+#endif
     sort(DescentResults.begin(), DescentResults.end());
     double DESCENT_ARG = DescentResults[0].second;
     cerr << "FIXED DESCENT TYPE: " << 2 << endl;
@@ -290,26 +317,26 @@ State<T, G> autoSearch(State<T, G> initial_state, double SecondsToWait = 30.) {
 }
 
 
-//void run_with_temperature(double t) {
-//}
-//
-//void find_appropriate_temperature(double lval, double rval, double step) {
-//    vector<double> temps;
-//    for (; lval < rval; lval += step) {
-//        temps.push_back(lval);
-//    }
-//    int l = 0, r = temps.size();
-//    while (r-l > 2) {
-//        int m1 = l+(r-l)/3;
-//        int m2 = r-(r-l)/3;
-//        #if ASYNC
-//        vector<future<void>> futures;
-//        futures.push_back(async(launch::async, run_with_temperature, temps[m1]));
-//        futures.push_back(async(launch::async, run_with_temperature, temps[m1]));
-//        for (int i = 0; i < 2; ++i) futures[i].wait();
-//        #else
-//        run_with_temperature(temps[m1]);
-//        run_with_temperature(temps[m2]);
-//        #endif
-//    }
-//}
+int main() {
+    int n;
+    cin >> n;
+    State<int, int> instance(n);
+    instance = autoSearch(instance, 2.);
+    //annealizer<int, int> descent(instance, 30000, 0.9, 4, 1, 2, 0.99, 0, 0.02);
+    //instance = descent.anneal();
+    cout << instance.f << '\n';
+    for (int x : instance.perm) cout << x + 1 << ' ';
+    cout.precision(9);
+    cout << endl << (double) clock() / CLOCKS_PER_SEC << endl;
+}
+// 100
+// NO ASYNC 11.596006 sec
+// WITH ASYNC 10.136434 sec
+
+// 200
+// NO ASYNC 16.726927 sec
+// WITH ASYNC 14.547082 sec
+
+// 500
+// NO ASYNC 36.203969 sec
+// ASYNC 30.946662 sec

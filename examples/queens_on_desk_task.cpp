@@ -14,8 +14,8 @@ struct State {
     }
     State<T, G> generate_new_state(random_generator<T>& gen, double t) {
         vector<int> nperm = perm;
-        int i = gen.gen(n/2, t, 0, n);
-        int j = gen.gen(n/2, t, 0, n);
+        int i = gen.gen(n/2, t, 0, n-1);
+        int j = gen.gen(n/2, t, 0, n-1);
         swap(nperm[i], nperm[j]);
         return State<T, G>(n, nperm);
     }
