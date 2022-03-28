@@ -119,7 +119,7 @@ struct acceptance_func {
 
 template <typename T, typename G>
 struct State {
-    G f;
+    G f; // it should always correspond to the current state
     // TODO data maintainer
     //..
     //
@@ -128,7 +128,7 @@ struct State {
         //..
         //
     };
-    State<T, G> generate_new_state(random_generator<T>& gen) {
+    State<T, G> generate_new_state(random_generator<T>& gen) { // you're obliged to fill
         // TODO new state generation
         //..
         //
@@ -210,7 +210,7 @@ static void fixedDescentForSearch(State<T, G> initial_state, int iterations, dou
 }
 
 template <typename T, typename G>
-State<T, G> autoSearch(State<T, G> initial_state, double SecondsToWait = 30.) {
+State<T, G> autoSearch(State<T, G> initial_state, double SecondsToWait = 5.) {
     // achieving appropriate number of iterations
     double TimeForEachIteration = clock();
     random_generator<T> SampleGenerator(4);
@@ -289,27 +289,12 @@ State<T, G> autoSearch(State<T, G> initial_state, double SecondsToWait = 30.) {
     return instance.anneal();
 }
 
-
-//void run_with_temperature(double t) {
-//}
-//
-//void find_appropriate_temperature(double lval, double rval, double step) {
-//    vector<double> temps;
-//    for (; lval < rval; lval += step) {
-//        temps.push_back(lval);
-//    }
-//    int l = 0, r = temps.size();
-//    while (r-l > 2) {
-//        int m1 = l+(r-l)/3;
-//        int m2 = r-(r-l)/3;
-//        #if ASYNC
-//        vector<future<void>> futures;
-//        futures.push_back(async(launch::async, run_with_temperature, temps[m1]));
-//        futures.push_back(async(launch::async, run_with_temperature, temps[m1]));
-//        for (int i = 0; i < 2; ++i) futures[i].wait();
-//        #else
-//        run_with_temperature(temps[m1]);
-//        run_with_temperature(temps[m2]);
-//        #endif
-//    }
-//}
+int main() {
+    // Initially you should modify a State structure for your demands.
+    // All State structure's function `generate_new_state` should be filled and `f` value have to be always correct, it's the result of the function that evaluates how good current state is (smaller - better).
+    // e.g. State<int, int> instance(n); you can create your own constructor.
+    // 1 if you don't have already prepared hyperparameters) after that call `autoSearch` function with first parameter = `instance` and second = how many seconds you can afford to spend on the final calculations (after setting all parameters). You'll receive the best hyperparameters and the best state that the algorithm has achieved.
+    // 2 if your aim is just in running annealing algorithm) use `annealizer` constructor for setting hyperparameters and then run `anneal` function to get the best state that the algorithm has achieved.
+    // Toggling #define ASYNC 1/0 you can choose whether you want multithreading in you program (1) or not (0).
+    return 0;
+}
