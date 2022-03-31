@@ -103,5 +103,7 @@ instance = descent.anneal();
 
 ## Resources
 https://www.sciencedirect.com/science/article/pii/0895717789902021
+
 https://www.math.spbu.ru/user/gran/sb1/lopatin.pdf
+
 https://dl.acm.org/doi/pdf/10.5555/1882757.1882790
