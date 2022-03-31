@@ -291,7 +291,7 @@ State<T, G> autoSearch(State<T, G> initial_state, double SecondsToWait = 5.) {
 
 int main() {
     // Initially you should modify a State structure for your demands.
-    // All State structure's function `generate_new_state` should be filled and `f` value have to be always correct, it's the result of the function that evaluates how good current state is (smaller - better).
+    // State structure's function `generate_new_state` should be filled and `f` value have to be always correct, it's the result of the function that evaluates how good current state is (smaller - better).
     // e.g. State<int, int> instance(n); you can create your own constructor.
     // 1 if you don't have already prepared hyperparameters) after that call `autoSearch` function with first parameter = `instance` and second = how many seconds you can afford to spend on the final calculations (after setting all parameters). You'll receive the best hyperparameters and the best state that the algorithm has achieved.
     // 2 if your aim is just in running annealing algorithm) use `annealizer` constructor for setting hyperparameters and then run `anneal` function to get the best state that the algorithm has achieved.
