@@ -1,13 +1,15 @@
 #define ASYNC 1
 #if ASYNC
-    #include <future>
-    #include <mutex>
-    #include <thread>
-    #include <tuple>
-    static std::mutex Tmutex;
-    const unsigned int THREAD_NUMBER = std::thread::hardware_concurrency();
+#include <future>
+#include <mutex>
+#include <thread>
+#include <tuple>
+#pragma GCC (lib, "pthreadVC2.lib")
+static std::mutex Tmutex;
+const unsigned int THREAD_NUMBER = std::thread::hardware_concurrency();
 #else
 #endif
+#include <thread>
 
 #include <iostream>
 #include <utility>
@@ -123,24 +125,40 @@ struct acceptance_func {
 
 template <typename T, typename G>
 struct State {
-    G f; // it should always correspond to the current state
-    // TODO data maintainer
-    //..
-    //
-    State() {
-        // TODO State constructor
-        //..
-        //
+    G f;
+    int n;
+    vector<int> perm;
+    State() = default;
+    State(int n): n(n) {
+        mt19937 rnd(55);
+        perm.resize(n); iota(perm.begin(), perm.end(), 0); shuffle(perm.begin(), perm.end(), rnd);
+#if ASYNC
+#else
+        f = F();
+#endif
     };
-    State<T, G> generate_new_state(random_generator<T>& gen) { // you're obliged to fill
-        // TODO new state generation
-        //..
-        //
+    State(int n, vector<int> perm): n(n), perm(move(perm)) {
+#if ASYNC
+#else
+        f = F();
+#endif
+    }
+    State<T, G> generate_new_state(random_generator<T>& gen, double t) {
+        vector<int> nperm = perm;
+        int i = gen.gen(n/2, t, 0, n-1);
+        int j = gen.gen(n/2, t, 0, n-1);
+        swap(nperm[i], nperm[j]);
+        return State<T, G>(n, nperm);
     }
     T F() {
-        // TODO new estimation function
-        //..
-        //
+        std::this_thread::sleep_for(std::chrono::milliseconds (1000));
+        f = 0;
+        for (int i = 0; i < n; ++i) {
+            for (int j = i+1; j < n; ++j) {
+                if ((j-i)+perm[i] == perm[j] || (i-j)+perm[i] == perm[j]) f++;
+            }
+        }
+        return f;
     }
 }; // TODO this structure needs user's alterations
 
@@ -304,21 +322,21 @@ struct annealizer { // only for minimization (if you need to maximize change all
 
 template <typename T, typename G>
 static void fixedTemperatureForSearch(State<T, G> initial_state, int iterations, double temperature, double accept_arg, vector<pair<double, double> >* TemperatureResults) {
-    annealizer instance(initial_state, iterations, temperature, 4, 1., 2, 0.9, 0, accept_arg);
-    #if ASYNC
-        lock_guard<mutex> lock(Tmutex);
-    #else
-    #endif
+    annealizer<T, G> instance(initial_state, iterations, temperature, 4, 1., 2, 0.9, 0, accept_arg);
+#if ASYNC
+    lock_guard<mutex> lock(Tmutex);
+#else
+#endif
     TemperatureResults->emplace_back(instance.anneal().f, temperature);
 }
 
 template <typename T, typename G>
 static void fixedDescentForSearch(State<T, G> initial_state, int iterations, double temperature, double accept_arg, double descent, vector<pair<double, double> >* DescentResults) {
-    annealizer instance(initial_state, iterations, temperature, 4, 1., 2, descent, 0, accept_arg);
-    #if ASYNC
-        lock_guard<mutex> lock(Tmutex);
-    #else
-    #endif
+    annealizer<T, G> instance(initial_state, iterations, temperature, 4, 1., 2, descent, 0, accept_arg);
+#if ASYNC
+    lock_guard<mutex> lock(Tmutex);
+#else
+#endif
     DescentResults->emplace_back(instance.anneal().f, descent);
 }
 
@@ -346,23 +364,23 @@ State<T, G> autoSearch(State<T, G> initial_state, double SecondsToWait = 5.) {
     // achieving appropriate temperature
     random_generator<double> TemperatureGenerator(3);
     const int K = 50;
-    #if ASYNC
-        vector<future<void> > TemperatureFutures;
-    #else
-    #endif
+#if ASYNC
+    vector<future<void> > TemperatureFutures;
+#else
+#endif
     vector<pair<double, double> > TemperatureResults;
     for (int i = 0; i < K; ++i) {
         double t = TemperatureGenerator.gen(0., 1., 0.65, 0.95);
-        #if ASYNC
-            TemperatureFutures.push_back(async(launch::async, fixedTemperatureForSearch<T, G>, initial_state, APPROBATION_ITERATIONS, t, ACCEPT_ARG, &TemperatureResults));
-        #else
-            fixedTemperatureForSearch(initial_state, APPROBATION_ITERATIONS, t, ACCEPT_ARG, &TemperatureResults);
-        #endif
+#if ASYNC
+        TemperatureFutures.push_back(async(launch::async, fixedTemperatureForSearch<T, G>, initial_state, APPROBATION_ITERATIONS, t, ACCEPT_ARG, &TemperatureResults));
+#else
+        fixedTemperatureForSearch(initial_state, APPROBATION_ITERATIONS, t, ACCEPT_ARG, &TemperatureResults);
+#endif
     }
-    #if ASYNC
-        for (int i = 0; i < K; ++i) TemperatureFutures[i].wait();
-    #else
-    #endif
+#if ASYNC
+    for (int i = 0; i < K; ++i) TemperatureFutures[i].wait();
+#else
+#endif
     sort(TemperatureResults.begin(), TemperatureResults.end()); // NOT AS GOOD AS POSSIBLE
     double TEMPERATURE = TemperatureResults[0].second;
     cerr << "FOUND BEST TEMPERATURE: " << TEMPERATURE << endl;
@@ -370,23 +388,23 @@ State<T, G> autoSearch(State<T, G> initial_state, double SecondsToWait = 5.) {
     // achieving appropriate descent function
     random_generator<double> DescentGenerator(3);
     const int H = 50;
-    #if ASYNC
-        vector<future<void> > DescentFutures;
-    #else
-    #endif
+#if ASYNC
+    vector<future<void> > DescentFutures;
+#else
+#endif
     vector<pair<double, double> > DescentResults;
     for (int i = 0; i < H; ++i) {
         double descent = DescentGenerator.gen(0., 1., 0.8, 0.999);
-        #if ASYNC
-            DescentFutures.push_back(async(launch::async, fixedDescentForSearch<T, G>, initial_state, APPROBATION_ITERATIONS, TEMPERATURE, ACCEPT_ARG, descent, &DescentResults));
-        #else
-            fixedDescentForSearch(initial_state, APPROBATION_ITERATIONS, TEMPERATURE, ACCEPT_ARG, descent, &DescentResults);
-        #endif
+#if ASYNC
+        DescentFutures.push_back(async(launch::async, fixedDescentForSearch<T, G>, initial_state, APPROBATION_ITERATIONS, TEMPERATURE, ACCEPT_ARG, descent, &DescentResults));
+#else
+        fixedDescentForSearch(initial_state, APPROBATION_ITERATIONS, TEMPERATURE, ACCEPT_ARG, descent, &DescentResults);
+#endif
     }
-    #if ASYNC
-        for (int i = 0; i < H; ++i) DescentFutures[i].wait();
-    #else
-    #endif
+#if ASYNC
+    for (int i = 0; i < H; ++i) DescentFutures[i].wait();
+#else
+#endif
     sort(DescentResults.begin(), DescentResults.end());
     double DESCENT_ARG = DescentResults[0].second;
     cerr << "FIXED DESCENT TYPE: " << 2 << endl;
@@ -397,22 +415,46 @@ State<T, G> autoSearch(State<T, G> initial_state, double SecondsToWait = 5.) {
     cerr << "FIXED GENERATOR TYPE: " << 4 << endl;
     cerr << "FIXED GENERATOR ARGUMENT: " << 1 << endl;
 
-    cerr << "(State<T, G>, " << ITERATIONS << ", " << TEMPERATURE << ", 4, 1., 2, " << DESCENT_ARG << ", 0, " << ACCEPT_ARG << ")" << endl;
-    annealizer instance(initial_state, ITERATIONS, TEMPERATURE, 4, 1., 2, DESCENT_ARG, 0, ACCEPT_ARG);
+    cerr << "(State<T, G> initial_state, " << ITERATIONS << ", " << TEMPERATURE << ", 4, 1., 2, " << DESCENT_ARG << ", 0, " << ACCEPT_ARG << ")" << endl;
+    annealizer<T, G> instance(initial_state, ITERATIONS, TEMPERATURE, 4, 1., 2, DESCENT_ARG, 0, ACCEPT_ARG);
     return instance.anneal();
 }
 
+//int main() {
+//    int n;
+//    cin >> n;
+//    State<int, int> instance(n);
+//    instance = autoSearch(instance, 2.);
+//    //annealizer<int, int> descent(instance, 30000, 0.9, 4, 1, 2, 0.99, 0, 0.02);
+//    //instance = descent.anneal();
+//    cout << instance.f << '\n';
+//    for (int x : instance.perm) cout << x + 1 << ' ';
+//    cout.precision(9);
+//    cout << endl << (double) clock() / CLOCKS_PER_SEC << endl;
+//}
+
 int main() {
-    // Initially you should modify a State structure for your demands.
-    // State structure's function `generate_new_state` should be filled and `f` value have to be always correct (if standard sequential annealing), it's the result of the function that evaluates how good current state is (smaller - better).
-    // e.g. State<int, int> instance(n); you can create your own constructor.
-    // 1 if you don't have already prepared hyperparameters) after that call `autoSearch` function with first parameter = `instance` and second = how many seconds you can afford to spend on the final calculations (after setting all parameters). You'll receive the best hyperparameters and the best state that the algorithm has achieved.
-    // 2 if your aim is just in running annealing algorithm) use `annealizer` constructor for setting hyperparameters and then run `anneal` function to get the best state that the algorithm has achieved.
-    // Toggling #define ASYNC 1/0 you can choose whether you want multithreading in you program (1) or not (0).
-    return 0;
+    int n; cin >> n;
+    State<int, int> instance(n);
+    auto t1 = chrono::high_resolution_clock::now();
+#if ASYNC
+    unsequential_annealizer<int, int> descent(instance,  100, 0.899661, 4, 1., 2, 0.899883, 0, 0.002);
+#else
+    annealizer<int, int> descent(instance,  100, 0.899661, 4, 1., 2, 0.899883, 0, 0.002);
+#endif
+    instance = descent.anneal();
+    auto t2 = chrono::high_resolution_clock::now();
+    cout << (int)chrono::duration_cast<chrono::milliseconds>(t2 - t1).count() << "ms\n";
+//    cout << instance.f << '\n';
+//    for (int x : instance.perm) cout << x+1 << ' ';
+//    cout << endl; cout.precision(15);
+//    cout << (double)clock()/CLOCKS_PER_SEC << endl;
 }
 
 // In CMake
 // set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
-// In terminal
+// On console
 // g++ -std=c++17 -pthread main.cpp
+
+// sequential 100015ms 01:48,10
+// multithreading 89053ms 01:30.10

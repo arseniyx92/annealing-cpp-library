@@ -4,7 +4,7 @@
 ## Annealing algorithm in general
 https://en.wikipedia.org/wiki/Simulated_annealing
 
-## Parallel Simulated Annealing
+## Parallel Simulated Annealing _(only for not sequential evaluation functions)_
 How to speed up annealing algorithm with the most efficiency. The answer is not really perplex: adding multithreading.
 The problem is in the core idea of the algorithm.
 It is not like local optimization, where you ("land on the surface in random places") generating many random initializations and then protruding to the local minimum from each one.
@@ -34,7 +34,7 @@ Finally, root node process should eliminate itself.
 This algorithm is not efficient enough. In this tree rejected edges grows much faster than accepted so it won't be enough threads to cover all the vertices that we need (particularly this thing is fixable).
 Moreover, killing processes is excessively large amount of work. And with the number of threads growing the optimization is getting less efficient. 
 
-#### Algorithm that I use in this project _(still not implemented)_
+#### Algorithm that I use in this project
 
 Let's generate a tree containing as many vertices as threads our machine obtain, the structure of this tree depends on the level of temperature that we have at the current moment.
 Higher temperature more `accented` vertices, lower - more `rejected`. It's easy to implement using the basics of probability theory: just by choosing what leaf to generate and after generating deleting it from a structure and adding its own children-leafs.
@@ -48,6 +48,9 @@ It works fine consuming only one communication action per process, furthermore i
 Initially you should modify a `State` structure for your demands.
 `State` structure's function `generate_new_state` should be filled and `f` value have to be always correct, it's the result of the function that evaluates how good current state is (smaller - better).
 You can create your own constructor.
+
+**!!! If you are using `unsequential_annealizer`, you do not have to maintain `f` variable, it will always be calculated by `F()` function.
+Moreover, if you have much more efficient way to sequentially calculate `f` than just manually calculating it with `F()`, use standard `annealizer`, it will be more efficient.**
 
 Example
 ```c++
@@ -97,9 +100,23 @@ State<int, int> instance(n);
 annealizer<int, int> descent(instance, 30000, 0.9, 4, 1, 2, 0.99, 0, 0.02);
 instance = descent.anneal();
 ```
+3) if your aim is just in running annealing algorithm in parallel and you have unsequential evaluation function
+```c++
+State<int, int> instance(n);
+unsequential_annealizer<int, int> descent(instance, 30000, 0.9, 4, 1, 2, 0.99, 0, 0.02);
+instance = descent.anneal();
+```
 
 
 **_Toggling #define ASYNC 1/0 you can choose whether you want multithreading in you program (1) or not (0)._**
+
+_to use multithreading you may have to use this flag for code compilation:_
+```cmake
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+```
+```shell
+g++ -std=c++17 -pthread main.cpp
+```
 
 ## Resources
 https://www.sciencedirect.com/science/article/pii/0895717789902021
