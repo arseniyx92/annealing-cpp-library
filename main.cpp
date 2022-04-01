@@ -5,7 +5,7 @@
     #include <thread>
     #include <tuple>
     static std::mutex Tmutex;
-    const unsigned int THREAD_NUMBER = std::thread::hardware_concurrency();
+    const unsigned int THREAD_NUMBER = 1000; //std::thread::hardware_concurrency(); - number of cores
 #else
 #endif
 
@@ -193,11 +193,17 @@ struct unsequential_annealizer { // only for minimization (if you need to maximi
     }
     State<T, G> anneal() {
         for (int iter = 0; iter < N;) {
+
+            // Something weird :)
+            double accept_chance = 0.7;
+            if (t < 0.5) accept_chance = 0.4;
+            if (t < 0.2) accept_chance = 0.2;
+
             vector<Node*> tree;
             vector<tuple<double, int, Node*> > looking_for; // {probability, current, parent}
             tree.push_back(new Node(current_state, current_state.generate_new_state(gen, t), t));
-            looking_for.emplace_back(t, 1, tree[0]);
-            looking_for.emplace_back(1.-t, 0, tree[0]);
+            looking_for.emplace_back(accept_chance, 1, tree[0]);
+            looking_for.emplace_back(1.-accept_chance, 0, tree[0]);
             while (tree.size() != THREAD_NUMBER) {
                 double x = gen.generate_probability();
                 double sum = 0., cur = 0.;
@@ -219,8 +225,8 @@ struct unsequential_annealizer { // only for minimization (if you need to maximi
                         }
                         swap(looking_for[i], looking_for.back());
                         looking_for.pop_back();
-                        looking_for.emplace_back(prob*t, 1, tree.back());
-                        looking_for.emplace_back(prob*(1-t), 0, tree.back());
+                        looking_for.emplace_back(prob*accept_chance, 1, tree.back());
+                        looking_for.emplace_back(prob*(1-accept_chance), 0, tree.back());
                         break;
                     }
                 }
